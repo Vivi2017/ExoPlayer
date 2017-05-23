@@ -1,5 +1,35 @@
 [
   {
+    "name": "demo test",
+    "samples": [
+      {
+        "name": "tcp test",
+        "uri": "http://10.250.52.133:12345",
+        "extension": "video"
+      }
+    ]
+  },
+  {
+    "name": "local",
+    "samples": [
+      {
+        "name": "test2",
+        "uri": "/sdcard/Movies/test.mp4",
+        "extension": "mp4"
+      },
+      {
+        "name": "fake",
+        "uri": "/sdcard/Movies/fake.mp4",
+        "extension": "mp4"
+      },
+      {
+        "name": "animal",
+        "uri": "/sdcard/Movies/animal.mp4",
+        "extension": "mp4"
+      }
+    ]
+  },
+  {
     "name": "YouTube DASH",
     "samples": [
       {

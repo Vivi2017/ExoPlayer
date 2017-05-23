@@ -63,6 +63,11 @@ public final class DefaultDataSource implements DataSource {
         DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS, allowCrossProtocolRedirects);
   }
 
+  public DefaultDataSource(Context context, TransferListener<? super DataSource> listener,
+                           String userAgent, boolean allowCrossProtocolRedirects, boolean isTcp) {
+    this(context, listener, userAgent, TcpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS,
+            TcpDataSource.DEFAULT_READ_TIMEOUT_MILLIS, allowCrossProtocolRedirects);
+  }
   /**
    * Constructs a new instance, optionally configured to follow cross-protocol redirects.
    *

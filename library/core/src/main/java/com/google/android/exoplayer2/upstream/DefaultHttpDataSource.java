@@ -83,7 +83,7 @@ public class DefaultHttpDataSource implements HttpDataSource {
 
   private long bytesSkipped;
   private long bytesRead;
-
+  private  Uri uriTest;
   /**
    * @param userAgent The User-Agent string that should be used.
    * @param contentTypePredicate An optional {@link Predicate}. If a content type is rejected by the
@@ -188,6 +188,8 @@ public class DefaultHttpDataSource implements HttpDataSource {
     this.dataSpec = dataSpec;
     this.bytesRead = 0;
     this.bytesSkipped = 0;
+
+
     try {
       connection = makeConnection(dataSpec);
     } catch (IOException e) {
@@ -334,11 +336,100 @@ public class DefaultHttpDataSource implements HttpDataSource {
     return bytesToRead == C.LENGTH_UNSET ? bytesToRead : bytesToRead - bytesRead;
   }
 
+
+  /**
+   * Establishes a connection, following redirects to do so where permitted.
+   */
+  private HttpURLConnection waitConnection(DataSpec dataSpec) throws IOException {
+    URL url = new URL(dataSpec.uri.toString());
+    byte[] postBody = dataSpec.postBody;
+    long position = dataSpec.position;
+    long length = dataSpec.length;
+    boolean allowGzip = dataSpec.isFlagSet(DataSpec.FLAG_ALLOW_GZIP);
+
+    if (!allowCrossProtocolRedirects) {
+      // HttpURLConnection disallows cross-protocol redirects, but otherwise performs redirection
+      // automatically. This is the behavior we want, so use it.
+      return makeConnection(url, postBody, position, length, allowGzip, true /* followRedirects */);
+    }
+
+    // We need to handle redirects ourselves to allow cross-protocol redirects.
+    int redirectCount = 0;
+    while (redirectCount++ <= MAX_REDIRECTS) {
+      HttpURLConnection connection = makeConnection(
+              url, postBody, position, length, allowGzip, false /* followRedirects */);
+      int responseCode = connection.getResponseCode();
+      if (responseCode == HttpURLConnection.HTTP_MULT_CHOICE
+              || responseCode == HttpURLConnection.HTTP_MOVED_PERM
+              || responseCode == HttpURLConnection.HTTP_MOVED_TEMP
+              || responseCode == HttpURLConnection.HTTP_SEE_OTHER
+              || (postBody == null
+              && (responseCode == 307 /* HTTP_TEMP_REDIRECT */
+              || responseCode == 308 /* HTTP_PERM_REDIRECT */))) {
+        // For 300, 301, 302, and 303 POST requests follow the redirect and are transformed into
+        // GET requests. For 307 and 308 POST requests are not redirected.
+        postBody = null;
+        String location = connection.getHeaderField("Location");
+        connection.disconnect();
+        url = handleRedirect(url, location);
+      } else {
+        return connection;
+      }
+    }
+
+    // If we get here we've been redirected more times than are permitted.
+    throw new NoRouteToHostException("Too many redirects: " + redirectCount);
+  }
+
+  private HttpURLConnection waitConnection(URL url, byte[] postBody, long position,
+                                           long length, boolean allowGzip, boolean followRedirects) throws IOException {
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    connection.setConnectTimeout(connectTimeoutMillis);
+    connection.setReadTimeout(readTimeoutMillis);
+    if (defaultRequestProperties != null) {
+      for (Map.Entry<String, String> property : defaultRequestProperties.getSnapshot().entrySet()) {
+        connection.setRequestProperty(property.getKey(), property.getValue());
+      }
+    }
+    for (Map.Entry<String, String> property : requestProperties.getSnapshot().entrySet()) {
+      connection.setRequestProperty(property.getKey(), property.getValue());
+    }
+    if (!(position == 0 && length == C.LENGTH_UNSET)) {
+      String rangeRequest = "bytes=" + position + "-";
+      if (length != C.LENGTH_UNSET) {
+        rangeRequest += (position + length - 1);
+      }
+      connection.setRequestProperty("Range", rangeRequest);
+    }
+    connection.setRequestProperty("User-Agent", userAgent);
+    if (!allowGzip) {
+      connection.setRequestProperty("Accept-Encoding", "identity");
+    }
+    connection.setInstanceFollowRedirects(followRedirects);
+    connection.setDoOutput(postBody != null);
+    if (postBody != null) {
+      connection.setRequestMethod("POST");
+      if (postBody.length == 0) {
+        connection.connect();
+      } else  {
+        connection.setFixedLengthStreamingMode(postBody.length);
+        connection.connect();
+        OutputStream os = connection.getOutputStream();
+        os.write(postBody);
+        os.close();
+      }
+    } else {
+      connection.connect();
+    }
+    return connection;
+  }
   /**
    * Establishes a connection, following redirects to do so where permitted.
    */
   private HttpURLConnection makeConnection(DataSpec dataSpec) throws IOException {
     URL url = new URL(dataSpec.uri.toString());
+    //listen_server listenServer = listen_server.getInstance();
+   // URL url = new URL(listenServer.getSocketRec().getInetAddress()+":"+listenServer.getSocketRec().getPort());
     byte[] postBody = dataSpec.postBody;
     long position = dataSpec.position;
     long length = dataSpec.length;

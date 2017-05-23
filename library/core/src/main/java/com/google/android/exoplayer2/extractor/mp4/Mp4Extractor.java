@@ -69,7 +69,7 @@ public final class Mp4Extractor implements Extractor, SeekMap {
 
   // Brand stored in the ftyp atom for QuickTime media.
   private static final int BRAND_QUICKTIME = Util.getIntegerCodeForString("qt  ");
-
+ // private static final int BRAND_QUICKTIME = Util.getIntegerCodeForString("isom");
   /**
    * When seeking within the source, if the offset is greater than or equal to this value (or the
    * offset is negative), the source will be reloaded.

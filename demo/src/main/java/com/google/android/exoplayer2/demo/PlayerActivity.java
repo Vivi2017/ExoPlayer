@@ -68,6 +68,7 @@ import com.google.android.exoplayer2.ui.SimpleExoPlayerView;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.HttpDataSource;
+import com.google.android.exoplayer2.upstream.TcpDataSource;
 import com.google.android.exoplayer2.util.Util;
 import java.net.CookieHandler;
 import java.net.CookieManager;
@@ -118,7 +119,7 @@ public class PlayerActivity extends Activity implements OnClickListener, ExoPlay
   private boolean shouldAutoPlay;
   private int resumeWindow;
   private long resumePosition;
-
+  private boolean demoTest = false;
   // Activity lifecycle
 
   @Override
@@ -237,6 +238,10 @@ public class PlayerActivity extends Activity implements OnClickListener, ExoPlay
       boolean preferExtensionDecoders = intent.getBooleanExtra(PREFER_EXTENSION_DECODERS, false);
       UUID drmSchemeUuid = intent.hasExtra(DRM_SCHEME_UUID_EXTRA)
           ? UUID.fromString(intent.getStringExtra(DRM_SCHEME_UUID_EXTRA)) : null;
+      demoTest = false;
+      if(intent.hasExtra(EXTENSION_EXTRA))
+                demoTest = intent.getStringExtra(EXTENSION_EXTRA).equalsIgnoreCase("video");
+
       DrmSessionManager<FrameworkMediaCrypto> drmSessionManager = null;
       if (drmSchemeUuid != null) {
         String drmLicenseUrl = intent.getStringExtra(DRM_LICENSE_URL);
@@ -325,6 +330,10 @@ public class PlayerActivity extends Activity implements OnClickListener, ExoPlay
   private MediaSource buildMediaSource(Uri uri, String overrideExtension) {
     int type = TextUtils.isEmpty(overrideExtension) ? Util.inferContentType(uri)
         : Util.inferContentType("." + overrideExtension);
+    if (demoTest)
+    {
+      mediaDataSourceFactory = buildDataSourceFactory(true, demoTest);
+    }
     switch (type) {
       case C.TYPE_SS:
         return new SsMediaSource(uri, buildDataSourceFactory(false),
@@ -397,6 +406,11 @@ public class PlayerActivity extends Activity implements OnClickListener, ExoPlay
         .buildDataSourceFactory(useBandwidthMeter ? BANDWIDTH_METER : null);
   }
 
+
+  private DataSource.Factory buildDataSourceFactory(boolean useBandwidthMeter, boolean demoTest) {
+    return ((DemoApplication) getApplication())
+            .buildDataSourceFactory(useBandwidthMeter ? BANDWIDTH_METER : null, demoTest);
+  }
   /**
    * Returns a new HttpDataSource factory.
    *

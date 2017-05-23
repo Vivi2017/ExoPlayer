@@ -38,6 +38,7 @@ import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DataSourceInputStream;
 import com.google.android.exoplayer2.upstream.DataSpec;
 import com.google.android.exoplayer2.upstream.DefaultDataSource;
+import com.google.android.exoplayer2.upstream.listen_server;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.Util;
 import java.io.IOException;
@@ -83,6 +84,13 @@ public class SampleChooserActivity extends Activity {
     }
     SampleListLoader loaderTask = new SampleListLoader();
     loaderTask.execute(uris);
+
+    //  listen_server listenServer =  listen_server.getInstance();
+     // try {
+    //      listen_server.start_listen_server();
+     // } catch (IOException e) {
+     //     e.printStackTrace();
+     //f }
   }
 
   private void onSampleGroups(final List<SampleGroup> groups, boolean sawError) {

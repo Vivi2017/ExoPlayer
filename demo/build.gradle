@@ -50,6 +50,7 @@ dependencies {
     compile project(':library-hls')
     compile project(':library-smoothstreaming')
     compile project(':library-ui')
+    compile 'org.apache.commons:commons-lang3:3.5'
     withExtensionsCompile project(path: ':extension-ffmpeg')
     withExtensionsCompile project(path: ':extension-flac')
     withExtensionsCompile project(path: ':extension-opus')
