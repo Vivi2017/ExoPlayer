@@ -92,6 +92,8 @@ public final class FileDataSource implements DataSource {
 
     private ServerSocket serverSocket = null;
     private Socket socketRec = null;
+    private Thread socketThead = null;
+
     public final int postvideo = 1001;
     public final int sendfile = 1002;
     public final int getfile = 1003;
@@ -104,7 +106,6 @@ public final class FileDataSource implements DataSource {
     public int testTHread = 0;
 
     public String LOGTAG = "vivitest";
-    public final listen_server listenServer = listen_server.getInstance();
 
     public FileDataSource() {
         this(null);
@@ -115,8 +116,8 @@ public final class FileDataSource implements DataSource {
      */
     public FileDataSource(TransferListener<? super FileDataSource> listener) {
         this.listener = listener;
-        packetBuffer = new byte[DEFAULT_MAX_PACKET_SIZE];
-        localPacketBuffer = new byte[DEFAULT_MAX_PACKET_SIZE];
+        packetBuffer = new byte[2000];
+        //localPacketBuffer = new byte[maxPacketSize];
         cmdPacketBuffer = new byte[CMD_LENGTH];
     }
 
@@ -129,13 +130,12 @@ public final class FileDataSource implements DataSource {
             remoteFile = true;
             localRemaining = C.LENGTH_UNSET;
             bytesRemaining = C.LENGTH_UNSET;
-
-            if( (dataSpec.length == C.LENGTH_UNSET)
-                    &&(dataSpec.position == 0)
-                    && (fileTotalLength ==C.LENGTH_UNSET)) {
-                disConnection();
+            /* test one thread
+            if ((socketThead != null) && (socketThead.isInterrupted() == false)) {
+                socketThead.interrupt();
+                socketThead = null;
             }
-
+*/
             makeConnection();
 
             //remote open file to read
@@ -159,6 +159,12 @@ public final class FileDataSource implements DataSource {
                 //remotefile.seek(dataSpec.position);
                 seek(dataSpec.position);
             }
+/* test one thread
+            if (socketThead == null) {
+                socketThead = new Thread(new SocketHandleThread());
+                socketThead.start();
+            }
+*/
         } else {
             remoteFile = false;
             try {
@@ -183,27 +189,168 @@ public final class FileDataSource implements DataSource {
 
         return localRemaining;
     }
+    public int readRemote(byte[] buffer, int offset, int readLength)
+    {
+        int bytesRead = 0;
+        if (listensock == null){
+            return bytesRead;
+        }
+        if (localRemaining == sendLocalAll && localRemaining > 0) {
+            return C.RESULT_END_OF_INPUT;
+        }
 
+        if (packetRemaining > 0) {
+            int packetOffset = (int) (PacketBufferLength - packetRemaining);
+            bytesRead = (int) (Math.min(packetRemaining, readLength));
+            System.arraycopy(packetBuffer, packetOffset, buffer, offset, bytesRead);
+            packetRemaining -= bytesRead;
+            sendLocalAll += bytesRead;
+            return bytesRead;
+        }
+
+        Log.d(LOGTAG, " ======local out, request a package from remote");
+        message_buffer_info messageCmdSend = new message_buffer_info(getfile, fileOffset, DEFAULT_READ_PACKET_SIZE);
+        byte[] sendBuffer = messageCmdSend.toByteArray();
+
+        if (outStream == null)
+            try {
+                outStream = new DataOutputStream(listensock.getOutputStream());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        try {
+            outStream.write(sendBuffer, 0, CMD_LENGTH);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        message_buffer_info recvCmd = new message_buffer_info(0, 0, 0);
+        cmdPacketBuffer = new byte[CMD_LENGTH];
+        if (inCmdStream == null)
+            try {
+                inCmdStream = new DataInputStream(listensock.getInputStream());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        try {
+            inCmdStream.readFully(cmdPacketBuffer, 0, CMD_LENGTH);
+        } catch (IOException e) {
+            e.printStackTrace();
+
+        }
+        recvCmd = recvCmd.fromByteArray(cmdPacketBuffer);
+
+        if ((recvCmd.type == sendfile) && (recvCmd.length > 0)) {
+            if (inFileStream == null) {
+                try {
+                    inFileStream = new DataInputStream(listensock.getInputStream());
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
+            }
+            if (inFileStream != null) {
+                try {
+                    inFileStream.readFully(packetBuffer, 0, recvCmd.length);
+                    if (recvCmd.offset != (int) fileOffset) {
+                        Log.d(LOGTAG, "drop for offset = " + recvCmd.offset);
+                    }
+                    Log.d(LOGTAG, "remote package  arrive" +
+                            " length =" + recvCmd.length +
+                            " offset = " + recvCmd.offset);
+
+                    PacketBufferLength = recvCmd.length;
+                    bytesRemaining -= recvCmd.length;
+                    packetRemaining = PacketBufferLength;
+
+                    Log.d(LOGTAG, "======remote bytesRemaining = " + bytesRemaining);
+
+                    if (packetRemaining > 0) {
+                        int packetOffset = (int) (PacketBufferLength - packetRemaining);
+                        bytesRead = (int) (Math.min(packetRemaining, readLength));
+                        System.arraycopy(packetBuffer, packetOffset, buffer, offset, bytesRead);
+                        packetRemaining -= bytesRead;
+                        sendLocalAll += bytesRead;
+                        return bytesRead;
+                    }
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
+            }
+        } else if ((recvCmd.type == byebyebye) && (recvCmd.length == 0)) {
+            Log.d(LOGTAG, "remote send byebye");
+            if (inCmdStream != null)
+                try {
+                    inCmdStream.close();
+                    inCmdStream = null;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            if (inFileStream != null)
+                try {
+                    inFileStream.close();
+                    inFileStream = null;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+            if (listensock != null)
+                try {
+                    listensock.getOutputStream().close();
+                    listensock.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+        }
+
+        return bytesRead;
+    }
     @Override
     public int read(byte[] buffer, int offset, int readLength) throws FileDataSourceException {
         if (readLength == 0) {
             return 0;
         } else {
             int bytesRead = 0;
-            if (uri.getPath().startsWith("/sdcard/Movies/fake") && remoteFile) {
-
+            if (uri.getPath().startsWith("/sdcard/Movies/fake")) {
                 bytesRead = readRemote(buffer, offset, readLength);
                 if (listener != null) {
                     listener.onBytesTransferred(this, bytesRead);
                 }
                 return bytesRead;
 
-            } else {
-
-            if (bytesRemaining == 0) {
+            } else if (testTHread == 1) {
+            if (localRemaining == sendLocalAll && localRemaining > 0) {
                 return C.RESULT_END_OF_INPUT;
             }
 
+            if ((packetRemaining <= 0) && (packetBufferQue.size() > 0)) {
+                try {
+                    localPacketBuffer = packetBufferQue.take();
+                    PacketBufferLength = packetBufferQue.take().length;
+                    packetRemaining = PacketBufferLength;
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+            if (packetRemaining > 0) {
+                int packetOffset = (int) (PacketBufferLength - packetRemaining);
+                bytesRead = (int) (Math.min(packetRemaining, readLength));
+                System.arraycopy(localPacketBuffer, packetOffset, buffer, offset, bytesRead);
+                packetRemaining -= bytesRead;
+                sendLocalAll += bytesRead;
+            }
+
+
+            if (listener != null) {
+                listener.onBytesTransferred(this, bytesRead);
+            }
+            return bytesRead;
+        } else {
+            if (bytesRemaining == 0) {
+                return C.RESULT_END_OF_INPUT;
+            }
             try {
                 bytesRead = file.read(buffer, offset, (int) Math.min(bytesRemaining, readLength));
             } catch (IOException e) {
@@ -234,7 +381,6 @@ public final class FileDataSource implements DataSource {
       if (file != null) {
         file.close();
       }
-
     } catch (IOException e) {
       throw new FileDataSourceException(e);
     } finally {
@@ -249,74 +395,46 @@ public final class FileDataSource implements DataSource {
   }
 
   public void makeConnection() {
-      //listenServer = listen_server.getInstance();
-      serverSocket = listenServer.getServerSocket();
+    if (serverSocket == null) {
+      try {
+        InetAddress tempInet = getInetAddress();
+        String localIP = getLocalIpAddress();
+
+        serverSocket = new ServerSocket(SERVERPORT, 0, tempInet);
+        Log.d(LOGTAG, " vivi serverSocket ready " + localIP);
+
         if (socketRec == null) {
-            try {
-                socketRec = serverSocket.accept();
-                if (socketRec != null) {
-                    listenServer.setClientSocket(socketRec);
-                    if (null == inCmdStream)
-                        inCmdStream = new DataInputStream(socketRec.getInputStream());
+          socketRec = serverSocket.accept();
+          if (socketRec != null) {
+            if (null == inCmdStream)
+              inCmdStream = new DataInputStream(socketRec.getInputStream());
 
-                      while (inCmdStream != null && fileTotalLength == C.LENGTH_UNSET) {
-                        // a channel is ready for reading
-                        message_buffer_info messageCmd = new message_buffer_info(0, 0, 0);
-                        cmdPacketBuffer = new byte[CMD_LENGTH];
-                        inCmdStream.readFully(cmdPacketBuffer, 0, CMD_LENGTH);
-                        messageCmd = messageCmd.fromByteArray(cmdPacketBuffer);
+            while (inCmdStream != null && fileTotalLength == C.LENGTH_UNSET) {
+              // a channel is ready for reading
+              message_buffer_info messageCmd = new message_buffer_info(0, 0, 0);
+              cmdPacketBuffer = new byte[CMD_LENGTH];
+              inCmdStream.readFully(cmdPacketBuffer, 0, CMD_LENGTH);
+              messageCmd = messageCmd.fromByteArray(cmdPacketBuffer);
 
-                        if (messageCmd.type == postvideo) {
-                            listensock = socketRec;
-                            fileTotalLength = messageCmd.length;
-                            break;
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
+              if (messageCmd.type == postvideo) {
+                listensock = socketRec;
+                fileTotalLength = messageCmd.length;
+                break;
+              }
+
             }
+          }
         }
+      } catch (SocketException ex) {
+        Log.e(LOGTAG, "err to accept connect ");
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
     }
 
 
-  public void disConnection() {
-       // listenServer = listen_server.getInstance();
-        if (listenServer.getClientSocket() != null) {
-                //sendbyebye to remote
-                Log.d(LOGTAG, " disConnection for a new player");
-                message_buffer_info messageCmdSend = new message_buffer_info(byebyebye, 0, CMD_LENGTH);
-                byte[] sendBuffer = messageCmdSend.toByteArray();
 
-                if (outStream == null)
-                    try {
-                        outStream = new DataOutputStream(listenServer.getClientSocket().getOutputStream());
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-
-                try {
-                    outStream.write(sendBuffer, 0, CMD_LENGTH);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-            if (outStream != null)
-                try {
-                    outStream.close();
-                    outStream = null;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            try {
-                listenServer.getClientSocket().close();
-                listenServer.setClientSocket(null);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
   }
-
   public void seek(long seekPosition)
   {
     if (outStream == null)
@@ -380,147 +498,7 @@ public final class FileDataSource implements DataSource {
     }
   }
 
-  private InetAddress getInetAddress()
-  {
-    try
-    {
-      for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();)
-      {
-        NetworkInterface intf = en.nextElement();
-        for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();)
-        {
-          InetAddress inetAddress = enumIpAddr.nextElement();
-          if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address)
-          {
-            return inetAddress;
-          }
-        }
-      }
-    }
-    catch (SocketException ex)
-    {
-      Log.e(LOGTAG, ex.toString());
-    }
-    return null;
-  }
-    public int readRemote(byte[] buffer, int offset, int readLength)
-    {
-        int bytesRead = 0;
-        if (listensock == null){
-            return bytesRead;
-        }
-        if (localRemaining == sendLocalAll && localRemaining > 0) {
-            return C.RESULT_END_OF_INPUT;
-        }
 
-        if (packetRemaining > 0) {
-            int packetOffset = (int) (PacketBufferLength - packetRemaining);
-            bytesRead = (int) (Math.min(packetRemaining, readLength));
-            System.arraycopy(packetBuffer, packetOffset, buffer, offset, bytesRead);
-            packetRemaining -= bytesRead;
-            sendLocalAll += bytesRead;
-            return bytesRead;
-        }
-
-       // Log.d(LOGTAG, " ======local out, request a package from remote");
-        message_buffer_info messageCmdSend = new message_buffer_info(getfile, fileOffset, DEFAULT_READ_PACKET_SIZE);
-        byte[] sendBuffer = messageCmdSend.toByteArray();
-
-        if (outStream == null)
-            try {
-                outStream = new DataOutputStream(listensock.getOutputStream());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        try {
-            outStream.write(sendBuffer, 0, CMD_LENGTH);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        message_buffer_info recvCmd = new message_buffer_info(0, 0, 0);
-        cmdPacketBuffer = new byte[CMD_LENGTH];
-        if (inCmdStream == null)
-            try {
-                inCmdStream = new DataInputStream(listensock.getInputStream());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        try {
-            inCmdStream.readFully(cmdPacketBuffer, 0, CMD_LENGTH);
-        } catch (IOException e) {
-            e.printStackTrace();
-
-        }
-        recvCmd = recvCmd.fromByteArray(cmdPacketBuffer);
-
-        if ((recvCmd.type == sendfile) && (recvCmd.length > 0)) {
-            if (inFileStream == null) {
-                try {
-                    inFileStream = new DataInputStream(listensock.getInputStream());
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                }
-            }
-            if (inFileStream != null) {
-                try {
-                    inFileStream.readFully(packetBuffer, 0, recvCmd.length);
-                    if (recvCmd.offset != (int) fileOffset) {
-                        Log.d(LOGTAG, "drop for offset = " + recvCmd.offset);
-                    }
-  //                  Log.d(LOGTAG, "remote package  arrive" +
-  //                          " length =" + recvCmd.length +
-  //                          " offset = " + recvCmd.offset);
-
-                    PacketBufferLength = recvCmd.length;
-                    bytesRemaining -= recvCmd.length;
-                    packetRemaining = PacketBufferLength;
-
-                    //Log.d(LOGTAG, "======remote bytesRemaining = " + bytesRemaining);
-
-                    if (packetRemaining > 0) {
-                        int packetOffset = (int) (PacketBufferLength - packetRemaining);
-                        bytesRead = (int) (Math.min(packetRemaining, readLength));
-                        System.arraycopy(packetBuffer, packetOffset, buffer, offset, bytesRead);
-                        packetRemaining -= bytesRead;
-                        sendLocalAll += bytesRead;
-                        return bytesRead;
-                    }
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                }
-            }
-        } else if ((recvCmd.type == byebyebye) && (recvCmd.length == 0)) {
-            Log.d(LOGTAG, "remote send byebye");
-            if (inCmdStream != null)
-                try {
-                    inCmdStream.close();
-                    inCmdStream = null;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            if (inFileStream != null)
-                try {
-                    inFileStream.close();
-                    inFileStream = null;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-            if (listensock != null)
-                try {
-                    listensock.getOutputStream().close();
-                    listensock.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-        }
-
-        return bytesRead;
-    }
-
-    /*
   private class SocketHandleThread implements Runnable {
 
     public void run() {
@@ -624,6 +602,28 @@ public final class FileDataSource implements DataSource {
         }
       }
     }
-  }8
-  */
+  }
+  private InetAddress getInetAddress()
+  {
+    try
+    {
+      for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();)
+      {
+        NetworkInterface intf = en.nextElement();
+        for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();)
+        {
+          InetAddress inetAddress = enumIpAddr.nextElement();
+          if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address)
+          {
+            return inetAddress;
+          }
+        }
+      }
+    }
+    catch (SocketException ex)
+    {
+      Log.e(LOGTAG, ex.toString());
+    }
+    return null;
+  }
 }

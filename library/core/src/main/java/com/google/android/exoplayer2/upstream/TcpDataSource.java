@@ -44,17 +44,12 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-import static android.R.attr.offset;
-import static com.google.android.exoplayer2.upstream.listen_server.LOGTAG;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
 import static com.google.android.exoplayer2.upstream.listen_server.SERVERPORT;
 import static com.google.android.exoplayer2.upstream.listen_server.getInetAddress;
 import static com.google.android.exoplayer2.upstream.listen_server.getLocalIpAddress;
-import static com.google.android.exoplayer2.upstream.listen_server.serverSocket;
-import static com.google.android.exoplayer2.upstream.listen_server.serverThread;
-import static com.google.android.exoplayer2.upstream.listen_server.socketRec;
-import static com.google.android.exoplayer2.upstream.listen_server.start_listen_server;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * A UDP {@link DataSource}.
@@ -159,7 +154,6 @@ public final class TcpDataSource implements DataSource {
         Log.d(LOGTAG, " construct tcpdatasource" );
 
     }
-
 
 
     public void makeConnection() {
