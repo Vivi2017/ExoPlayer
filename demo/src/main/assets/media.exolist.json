@@ -1,25 +1,20 @@
 [
   {
-    "name": "demo test",
+    "name": "Pano Demo",
     "samples": [
       {
-        "name": "Remote  File",
+        "name": "Play Remote File",
         "uri": "/sdcard/Movies/fake.mp4",
         "extension": "mp4"
       }
     ]
   },
   {
-    "name": "local",
+    "name": "Local Files",
     "samples": [
       {
-        "name": "test2",
+        "name": "Only for Test-->Push video file to /sdcard/Movies and rename to test.mp4",
         "uri": "/sdcard/Movies/test.mp4",
-        "extension": "mp4"
-      },
-      {
-        "name": "animal",
-        "uri": "/sdcard/Movies/animal.mp4",
         "extension": "mp4"
       }
     ]

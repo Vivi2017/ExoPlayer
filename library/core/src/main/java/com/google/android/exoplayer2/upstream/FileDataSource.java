@@ -243,17 +243,17 @@ public final class FileDataSource implements DataSource {
                         inCmdStream = new DataInputStream(socketRec.getInputStream());
 
                       while (inCmdStream != null && fileTotalLength == C.LENGTH_UNSET) {
-                        // a channel is ready for reading
-                        message_buffer_info messageCmd = new message_buffer_info(0, 0, 0);
-                        cmdPacketBuffer = new byte[CMD_LENGTH];
-                        inCmdStream.readFully(cmdPacketBuffer, 0, CMD_LENGTH);
-                        messageCmd = messageCmd.fromByteArray(cmdPacketBuffer);
+                            // a channel is ready for reading
+                            message_buffer_info messageCmd = new message_buffer_info(0, 0, 0);
+                            cmdPacketBuffer = new byte[CMD_LENGTH];
+                            inCmdStream.readFully(cmdPacketBuffer, 0, CMD_LENGTH);
+                            messageCmd = messageCmd.fromByteArray(cmdPacketBuffer);
 
-                        if (messageCmd.type == postvideo) {
-                            listensock = socketRec;
-                            fileTotalLength = messageCmd.length;
-                            break;
-                        }
+                            if (messageCmd.type == postvideo) {
+                                listensock = socketRec;
+                                fileTotalLength = messageCmd.length;
+                                break;
+                            }
                     }
                 }
             } catch (IOException e) {
@@ -386,7 +386,9 @@ public final class FileDataSource implements DataSource {
     }
     return null;
   }
-    public int readRemote(byte[] buffer, int offset, int readLength) {
+
+
+  public int readRemote(byte[] buffer, int offset, int readLength) {
         int bytesRead = 0;
         if (listensock == null) {
             return bytesRead;
@@ -460,6 +462,8 @@ public final class FileDataSource implements DataSource {
                 try {
                     listensock.getOutputStream().close();
                     listensock.close();
+                    listensock = null;
+                    socketRec  = null;
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -482,52 +486,24 @@ public final class FileDataSource implements DataSource {
             if (recvCmd.offset != (int) fileOffset) {
                 Log.d(LOGTAG, "drop for offset = " + recvCmd.offset);
             }
-            //                  Log.d(LOGTAG, "remote package  arrive" +
-            //                          " length =" + recvCmd.length +
-            //                          " offset = " + recvCmd.offset);
+            //   Log.d(LOGTAG, "remote package  arrive" +
+            //          " length =" + recvCmd.length +
+            //          " offset = " + recvCmd.offset);
 
             PacketBufferLength += recvCmd.length;
             bytesRemaining -= recvCmd.length;
             packetRemaining = PacketBufferLength;
         }
 
-   /*
-            int readCount = (recvCmd.length % DEFAULT_RECV_PACKET_SIZE == 0) ? (recvCmd.length / DEFAULT_RECV_PACKET_SIZE) :
-                    (recvCmd.length / DEFAULT_RECV_PACKET_SIZE + 1);
 
-            while (((readCount--) > 0) && (recvCmd.length > 0)) {
-                        int readL = Math.min(recvCmd.length, DEFAULT_RECV_PACKET_SIZE);
-                        recvCmd.length -= readL;
-                        try {
-                            inFileStream.readFully(packetBuffer, (int) PacketBufferLength, readL);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                        if (recvCmd.offset != (int) fileOffset) {
-                            Log.d(LOGTAG, "drop for offset = " + recvCmd.offset);
-                        }
-                        //                  Log.d(LOGTAG, "remote package  arrive" +
-                        //                          " length =" + recvCmd.length +
-                        //                          " offset = " + recvCmd.offset);
-
-                        PacketBufferLength += readL;
-                        bytesRemaining -= readL;
-                        packetRemaining = PacketBufferLength;
-
-                        //Log.d(LOGTAG, "======remote bytesRemaining = " + bytesRemaining);
-
-                    }
-
-            }
-            */
-            if (packetRemaining > 0) {
-                int packetOffset = (int) (PacketBufferLength - packetRemaining);
-                bytesRead = (int) (Math.min(packetRemaining, readLength));
-                System.arraycopy(packetBuffer, packetOffset, buffer, offset, bytesRead);
-                packetRemaining -= bytesRead;
-                sendLocalAll += bytesRead;
-            }
-            return bytesRead;
+        if (packetRemaining > 0) {
+            int packetOffset = (int) (PacketBufferLength - packetRemaining);
+            bytesRead = (int) (Math.min(packetRemaining, readLength));
+            System.arraycopy(packetBuffer, packetOffset, buffer, offset, bytesRead);
+            packetRemaining -= bytesRead;
+            sendLocalAll += bytesRead;
+        }
+        return bytesRead;
     }
     /*
   private class SocketHandleThread implements Runnable {
