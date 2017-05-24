@@ -474,6 +474,24 @@ public final class FileDataSource implements DataSource {
                     e1.printStackTrace();
                 }
             }
+            try {
+                inFileStream.readFully(packetBuffer, (int) PacketBufferLength, recvCmd.length);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            if (recvCmd.offset != (int) fileOffset) {
+                Log.d(LOGTAG, "drop for offset = " + recvCmd.offset);
+            }
+            //                  Log.d(LOGTAG, "remote package  arrive" +
+            //                          " length =" + recvCmd.length +
+            //                          " offset = " + recvCmd.offset);
+
+            PacketBufferLength += recvCmd.length;
+            bytesRemaining -= recvCmd.length;
+            packetRemaining = PacketBufferLength;
+        }
+
+   /*
             int readCount = (recvCmd.length % DEFAULT_RECV_PACKET_SIZE == 0) ? (recvCmd.length / DEFAULT_RECV_PACKET_SIZE) :
                     (recvCmd.length / DEFAULT_RECV_PACKET_SIZE + 1);
 
@@ -501,6 +519,7 @@ public final class FileDataSource implements DataSource {
                     }
 
             }
+            */
             if (packetRemaining > 0) {
                 int packetOffset = (int) (PacketBufferLength - packetRemaining);
                 bytesRead = (int) (Math.min(packetRemaining, readLength));
