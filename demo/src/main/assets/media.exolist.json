@@ -16,6 +16,11 @@
         "name": "Only for Test-->Push video file to /sdcard/Movies and rename to test.mp4",
         "uri": "/sdcard/Movies/test.mp4",
         "extension": "mp4"
+      },
+      {
+        "name":"4k test",
+        "uri":"/sdcard/Movies/International-Space-Station.mp4",
+        "extension": "mp4"
       }
     ]
   },
