@@ -154,6 +154,11 @@ public final class FileDataSource implements DataSource {
                     readRemoteThread = new Thread(new ReadRemoteThread());
 
                 readRemoteThread.start();
+                try {
+                    Thread.currentThread().sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
             }
         } else {
@@ -187,7 +192,7 @@ public final class FileDataSource implements DataSource {
             return 0;
         } else {
             int bytesRead = 0;
-            Log.d(LOGTAG, " read readLength = " + readLength);
+            //Log.d(LOGTAG, " read readLength = " + readLength);
             if (uri.getPath().startsWith("/sdcard/Movies/fake")) {
                 bytesRead = readRemote(buffer, offset, readLength);
                 if (listener != null) {
