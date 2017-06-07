@@ -239,8 +239,8 @@ public class PlayerActivity extends Activity implements OnClickListener, ExoPlay
       UUID drmSchemeUuid = intent.hasExtra(DRM_SCHEME_UUID_EXTRA)
           ? UUID.fromString(intent.getStringExtra(DRM_SCHEME_UUID_EXTRA)) : null;
       demoTest = false;
-      if(intent.hasExtra(EXTENSION_EXTRA))
-                demoTest = intent.getStringExtra(EXTENSION_EXTRA).equalsIgnoreCase("video");
+   //   if(intent.hasExtra(EXTENSION_EXTRA))
+    //            demoTest = intent.getStringExtra(EXTENSION_EXTRA).equalsIgnoreCase("video");
 
       DrmSessionManager<FrameworkMediaCrypto> drmSessionManager = null;
       if (drmSchemeUuid != null) {

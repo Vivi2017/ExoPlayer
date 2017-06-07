@@ -91,11 +91,12 @@ public final class FileDataSource implements DataSource {
     public final int getfile = 1003;
     public final int byebyebye = 1004;
     public final int seekfile = 1005;
+    public final int finishfile = 1006;
 
     public static final int DEFAULT_READ_PACKET_SIZE = 1460*20;//1460*5;//1460
     public static final int MAX_QUEUE_SIZE = 50;
     public static final int CMD_LENGTH = 12;
-
+    public static  boolean remoteFinished = false;
 
     public String LOGTAG = "vivitest";
     public final listen_server listenServer = listen_server.getInstance();
@@ -122,7 +123,7 @@ public final class FileDataSource implements DataSource {
             remoteFile = true;
             localRemaining = C.LENGTH_UNSET;
             bytesRemaining = C.LENGTH_UNSET;
-
+            remoteFinished = false;
             if( (dataSpec.length == C.LENGTH_UNSET)
                     &&(dataSpec.position == 0)
                     && (fileTotalLength ==C.LENGTH_UNSET)) {
@@ -149,6 +150,7 @@ public final class FileDataSource implements DataSource {
                     }
                 }
                 seek(dataSpec.position);
+
                 opened = true;
                 if (readRemoteThread == null)
                     readRemoteThread = new Thread(new ReadRemoteThread());
@@ -456,7 +458,7 @@ public final class FileDataSource implements DataSource {
 
                 if ((packetBufferQue.size() >= MAX_QUEUE_SIZE) ||
                         (opened == false) ||
-                        (bytesRemaining == 0)) {
+                        (bytesRemaining == 0) ) {
 
                     continue;
                 }
@@ -493,8 +495,12 @@ public final class FileDataSource implements DataSource {
 
                 }
                 recvCmd = recvCmd.fromByteArray(cmdPacketBuffer);
+                if ((recvCmd.type == finishfile) && (recvCmd.length == 0)) {
+                    Log.d(LOGTAG, "remote send finished");
+                     //stop request remote
+                    remoteFinished = true;
 
-                if ((recvCmd.type == byebyebye) && (recvCmd.length == 0)) {
+                }else if ((recvCmd.type == byebyebye) && (recvCmd.length == 0)) {
                     Log.d(LOGTAG, "remote send byebye");
                     if (inCmdStream != null)
                         try {
@@ -520,9 +526,10 @@ public final class FileDataSource implements DataSource {
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
-                }
 
-                if ((recvCmd.type == sendfile) && (recvCmd.length > 0)) {
+                    sendLocalAll = localRemaining;
+                    //stop read
+                } else if ((recvCmd.type == sendfile) && (recvCmd.length > 0)) {
                     if (inFileStream == null) {
                         try {
                             inFileStream = new DataInputStream(listensock.getInputStream());
